@@ -306,3 +306,130 @@ test "slices" {
     try expect(total(slice) == 6);
     try expect(@TypeOf(array[0..]) == *const [5]u8);
 }
+
+const Direction = enum { north, south, east, west };
+const Value = enum(u2) { zero, one, two };
+
+test "enum ordinal value" {
+    try expect(@enumToInt(Value.zero) == 0);
+    try expect(@enumToInt(Value.one) == 1);
+    try expect(@enumToInt(Value.two) == 2);
+}
+
+const Value2 = enum(u32) {
+    hundred = 100,
+    thousand = 1000,
+    million = 1000000,
+    next,
+};
+
+test "set enum ordinal value" {
+    try expect(@enumToInt(Value2.hundred) == 100);
+    try expect(@enumToInt(Value2.thousand) == 1000);
+    try expect(@enumToInt(Value2.million) == 1000000);
+    try expect(@enumToInt(Value2.next) == 1000001);
+}
+
+const Suit = enum {
+    clubs,
+    spades,
+    diamonds,
+    hearts,
+
+    pub fn isClubs(self: Suit) bool {
+        return self == Suit.clubs;
+    }
+};
+
+test "enum method" {
+    try expect(Suit.spades.isClubs() == Suit.isClubs(.spades));
+}
+
+const Mode = enum {
+    var count: u32 = 0;
+    on,
+    off,
+};
+
+test "hmm" {
+    Mode.count += 1;
+    try expect(Mode.count == 1);
+}
+
+const Vec3 = struct { x: f32, y: f32, z: f32 };
+
+test "struct usage" {
+    const my_vector = Vec3{ .x = 0, .y = 100, .z = 50 };
+    _ = my_vector;
+}
+
+const Vec4 = struct { x: f32, y: f32, z: f32 = 0, w: f32 = undefined };
+
+test "struct defaults" {
+    const my_vector = Vec4{ .x = 32, .y = -50 };
+    _ = my_vector;
+}
+
+const Stuff = struct {
+    x: i32,
+    y: i32,
+
+    fn swap(self: *Stuff) void {
+        const tmp = self.x;
+        self.x = self.y;
+        self.y = tmp;
+    }
+};
+
+test "automatic dereference" {
+    var thing = Stuff{ .x = 10, .y = 20 };
+    thing.swap();
+    try expect(thing.x == 20);
+    try expect(thing.y == 10);
+}
+
+const Result = union {
+    int: i64,
+    float: f64,
+    bool: bool,
+};
+
+// test "simple union" {
+//     var result = Result{ .int = 1234 };
+//     result.float = 12.34;
+// }
+
+// const Tag = enum { a, b, c };
+// const Tagged = union(Tag) { a: u8, b: f32, c: bool };
+const Tagged = union(enum) { a: u8, b: f32, c: bool };
+
+test "switch on tagged union" {
+    var value = Tagged{ .b = 1.5 };
+    switch (value) {
+        .a => |*byte| byte.* += 1,
+        .b => |*float| float.* *= 2,
+        .c => |*b| b.* = !b.*,
+    }
+    try expect(value.b == 3);
+}
+
+const Tagged2 = union(enum) { a: u8, b: f32, c: bool, none };
+
+test "integer widening" {
+    const a: u8 = 250;
+    const b: u16 = a;
+    const c: u32 = b;
+    try expect(c == a);
+}
+
+test "@intCast" {
+    const x: u64 = 200;
+    const y = @intCast(u8, x);
+    try expect(@TypeOf(y) == u8);
+}
+
+test "well defined overflow" {
+    var a: u8 = 255;
+    a +%= 1;
+    try expect(a == 0);
+}
