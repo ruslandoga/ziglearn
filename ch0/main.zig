@@ -1,5 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 test "if statement" {
     const a = true;
@@ -644,4 +645,204 @@ test "**" {
     const pattern = [_]u8{ 0xCC, 0xAA };
     const memory = pattern ** 3;
     try expect(eql(u8, &memory, &[_]u8{ 0xCC, 0xAA, 0xCC, 0xAA, 0xCC, 0xAA }));
+}
+
+test "optional if" {
+    var maybe_num: ?usize = 10;
+    if (maybe_num) |n| {
+        try expect(@TypeOf(n) == usize);
+        try expect(n == 10);
+    } else unreachable;
+}
+
+test "error union if" {
+    var ent_num: error{UnknownEntity}!u32 = 5;
+    if (ent_num) |entity| {
+        try expect(@TypeOf(entity) == u32);
+        try expect(entity == 5);
+    } else |err| {
+        _ = err catch {};
+        unreachable;
+    }
+}
+
+test "while optional" {
+    var i: ?u32 = 10;
+    while (i) |num| : (i.? -= 1) {
+        try expect(@TypeOf(num) == u32);
+        if (num == 1) {
+            i = null;
+            break;
+        }
+    }
+    try expect(i == null);
+}
+
+var numbers_left2: u32 = undefined;
+
+fn eventuallyErrorSequence() !u32 {
+    return if (numbers_left2 == 0) error.ReachedZero else blk: {
+        numbers_left2 -= 1;
+        break :blk numbers_left2;
+    };
+}
+
+test "while error union capture" {
+    var sum: u32 = 0;
+    numbers_left2 = 3;
+    while (eventuallyErrorSequence()) |value| {
+        sum += value;
+    } else |err| {
+        try expect(err == error.ReachedZero);
+    }
+
+    try expectEqual(sum, 3);
+}
+
+test "for capture" {
+    const x = [_]i8{ 1, 5, 120, -5 };
+    for (x) |v| try expectEqual(i8, @TypeOf(v));
+}
+
+const Info = union(enum) {
+    a: u32,
+    b: []const u8,
+    c,
+    d: u32,
+};
+
+test "switch capture" {
+    var b = Info{ .a = 10 };
+    const x = switch (b) {
+        .b => |str| blk: {
+            try expectEqual([]const u8, @TypeOf(str));
+            break :blk 1;
+        },
+        .c => 2,
+        .a, .d => |num| blk: {
+            try expectEqual(u32, @TypeOf(num));
+            break :blk num * 2;
+        },
+    };
+    try expectEqual(@as(u32, 20), x);
+}
+
+test "for with pointer capture" {
+    var data = [_]u8{ 1, 2, 3 };
+    for (data) |*byte| byte.* += 1;
+    try expect(eql(u8, &data, &[_]u8{ 2, 3, 4 }));
+}
+
+test "inline for" {
+    const types = [_]type{ i32, f32, u8, bool };
+    var sum: usize = 0;
+    inline for (types) |T| sum += @sizeOf(T);
+    try expectEqual(@as(usize, 10), sum);
+}
+
+extern fn show_window(*Window) callconv(.C) void;
+
+const Window = opaque {
+    fn show(self: *Window) void {
+        show_window(self);
+    }
+};
+
+const Button = opaque {};
+
+// test "opaque" {
+//     var main_window: *Window = undefined;
+//     show_window(main_window);
+
+//     var ok_button: *Button = undefined;
+//     show_window(ok_button);
+// }
+
+// test "opaque with declarations" {
+//     var main_window: *Window = undefined;
+//     main_window.show();
+// }
+
+test "anonymous struct literal" {
+    const Point = struct { x: i32, y: i32 };
+
+    var pt: Point = .{
+        .x = 13,
+        .y = 67,
+    };
+
+    try expect(pt.x == 13);
+    try expect(pt.y == 67);
+    try expect(@TypeOf(pt.x) == i32);
+}
+
+test "fully anonymous struct" {
+    try dump(.{
+        .int = @as(u32, 1234),
+        .float = @as(f32, 12.34),
+        .b = true,
+        .s = "hi",
+    });
+}
+
+fn dump(args: anytype) !void {
+    try expect(args.int == 1234);
+    try expect(args.float == 12.34);
+    try expect(args.b);
+    try expect(args.s[0] == 'h');
+    try expect(args.s[1] == 'i');
+}
+
+test "tuple" {
+    const values = .{ @as(u32, 1234), @as(f64, 12.34), true, "hi" } ++ .{false} ** 2;
+    try expect(values[0] == 1234);
+    try expect(values[4] == false);
+    inline for (values) |v, i| {
+        if (i != 2) continue;
+        try expect(v);
+    }
+    try expect(values.len == 6);
+    try expect(values.@"3"[0] == 'h');
+}
+
+test "sentinel termination" {
+    const terminated = [3:0]u8{ 3, 2, 1 };
+    try expect(terminated.len == 3);
+    try expect(@bitCast([4]u8, terminated)[3] == 0);
+}
+
+test "string literal" {
+    try expect(@TypeOf("hello") == *const [5:0]u8);
+}
+
+test "C string" {
+    const c_string: [*:0]const u8 = "hello";
+    var array: [5]u8 = undefined;
+
+    var i: usize = 0;
+    while (c_string[i] != 0) : (i += 1) {
+        array[i] = c_string[i];
+    }
+
+    try expectEqual([_]u8{ 'h', 'e', 'l', 'l', 'o' }, array);
+}
+
+test "coercion" {
+    var a: [*:0]u8 = undefined;
+    const b: [*]u8 = a;
+    _ = b;
+
+    var c: [5:0]u8 = undefined;
+    const d: [5]u8 = c;
+    _ = d;
+
+    var e: [:10]f32 = undefined;
+    const f = e;
+    _ = f;
+}
+
+test "sentinel terminated slicing" {
+    var x = [_:0]u8{255} ** 3;
+    const y = x[0..3 :0];
+    _ = y;
 }
