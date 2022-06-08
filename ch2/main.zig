@@ -423,4 +423,22 @@ test "sorting" {
     try expect(eql(u8, &data, &[_]u8{ 240, 10, 10, 5, 0, 0 }));
 }
 
-test "split iterator" {}
+test "split iterator" {
+    const text = "robust, optimal, reusable, maintainable, ";
+    var iter = std.mem.split(u8, text, ", ");
+    try expect(eql(u8, iter.next().?, "robust"));
+    try expect(eql(u8, iter.next().?, "optimal"));
+    try expect(eql(u8, iter.next().?, "reusable"));
+    try expect(eql(u8, iter.next().?, "maintainable"));
+    try expect(eql(u8, iter.next().?, ""));
+    try expect(iter.next() == null);
+}
+
+test "iterator looping" {
+    var iter = (try std.fs.cwd().openDir(".", .{ .iterate = true })).iterate();
+    var file_count: usize = 0;
+    while (try iter.next()) |entry| {
+        if (entry.kind == .File) file_count += 1;
+    }
+    try expect(file_count > 0);
+}
