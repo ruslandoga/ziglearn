@@ -390,4 +390,37 @@ test "string hashmap" {
     try expect(map.get("loris").? == .uncool);
 }
 
-test "stack" {}
+test "stack" {
+    const string = "(()())";
+
+    var stack = std.ArrayList(usize).init(test_allocator);
+    defer stack.deinit();
+
+    const Pair = struct { open: usize, close: usize };
+    var pairs = std.ArrayList(Pair).init(test_allocator);
+    defer pairs.deinit();
+
+    for (string) |char, i| {
+        if (char == '(') try stack.append(i);
+        if (char == ')') try pairs.append(.{ .open = stack.pop(), .close = i });
+    }
+
+    for (pairs.items) |pair, i| {
+        try expect(std.meta.eql(pair, switch (i) {
+            0 => Pair{ .open = 1, .close = 2 },
+            1 => Pair{ .open = 3, .close = 4 },
+            2 => Pair{ .open = 0, .close = 5 },
+            else => unreachable,
+        }));
+    }
+}
+
+test "sorting" {
+    var data = [_]u8{ 10, 240, 0, 0, 10, 5 };
+    std.sort.sort(u8, &data, {}, comptime std.sort.asc(u8));
+    try expect(eql(u8, &data, &[_]u8{ 0, 0, 5, 10, 10, 240 }));
+    std.sort.sort(u8, &data, {}, comptime std.sort.desc(u8));
+    try expect(eql(u8, &data, &[_]u8{ 240, 10, 10, 5, 0, 0 }));
+}
+
+test "split iterator" {}
