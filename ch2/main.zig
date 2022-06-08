@@ -292,3 +292,102 @@ test "json parse with strings" {
     try expect(eql(u8, x.name, "Joe"));
     try expect(x.age == 25);
 }
+
+test "random numbers" {
+    var prng = std.rand.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        try std.os.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    const rand = prng.random();
+
+    const a = rand.float(f32);
+    const b = rand.boolean();
+    const c = rand.int(u8);
+    const d = rand.intRangeAtMost(u8, 0, 255);
+
+    if (false) _ = .{ a, b, c, d };
+}
+
+test "crypto random numbers" {
+    const rand = std.crypto.random;
+
+    const a = rand.float(f32);
+    const b = rand.boolean();
+    const c = rand.int(u8);
+    const d = rand.intRangeAtMost(u8, 0, 255);
+
+    if (false) _ = .{ a, b, c, d };
+}
+
+fn ticker(step: u8) void {
+    while (true) {
+        std.time.sleep(1 * std.time.ns_per_s);
+        tick += @as(isize, step);
+    }
+}
+
+var tick: isize = 0;
+
+// test "threading" {
+//     var thread = try std.Thread.spawn(.{}, ticker, .{@as(u8, 1)});
+//     _ = thread;
+//     try expect(tick == 0);
+//     std.time.sleep(3 * std.time.ns_per_s / 2);
+//     try expect(tick == 1);
+// }
+
+test "hashing" {
+    const Point = struct { x: i32, y: i32 };
+
+    var map = std.AutoHashMap(u32, Point).init(test_allocator);
+    defer map.deinit();
+
+    try map.put(1525, .{ .x = 1, .y = -4 });
+    try map.put(1550, .{ .x = 2, .y = -3 });
+    try map.put(1575, .{ .x = 3, .y = -2 });
+    try map.put(1600, .{ .x = 4, .y = -1 });
+
+    try expect(map.count() == 4);
+
+    var sum = Point{ .x = 0, .y = 0 };
+    var iterator = map.iterator();
+
+    while (iterator.next()) |entry| {
+        sum.x += entry.value_ptr.x;
+        sum.y += entry.value_ptr.y;
+    }
+
+    try expect(sum.x == 10);
+    try expect(sum.y == -10);
+}
+
+test "fetchPut" {
+    var map = std.AutoArrayHashMap(u8, f32).init(test_allocator);
+    defer map.deinit();
+
+    try map.put(255, 10);
+    const old = try map.fetchPut(255, 100);
+
+    try expect(old.?.value == 10);
+    try expect(map.get(255).? == 100);
+}
+
+// struct Duration = {
+//     project: []u8,
+//     from: u32,
+//     to: u32,
+// }
+
+test "string hashmap" {
+    var map = std.StringHashMap(enum { cool, uncool }).init(test_allocator);
+    defer map.deinit();
+
+    try map.put("loris", .uncool);
+    try map.put("me", .cool);
+
+    try expect(map.get("me").? == .cool);
+    try expect(map.get("loris").? == .uncool);
+}
+
+test "stack" {}
